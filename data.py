@@ -14,8 +14,10 @@ from tqdm.contrib.concurrent import process_map
 from itertools import chain
 
 CPU_LIMIT = mp.cpu_count() - 1 # reserve 1 core for the OS
+
 DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python"
 R = 4
+
 
 class CifarData:
     """ 
@@ -25,7 +27,9 @@ class CifarData:
     to the CIFAR datasets as well as the ability to load, augment, and stream
     data batches on demand.
     """
+
     def __init__(self, fpath = DATA_PATH, mode = 'all'):
+
         """ 
         Initialized the CifarData Class.
 
@@ -33,19 +37,24 @@ class CifarData:
             :param str fpath: The path to train andtest data
             :param str mode: The data streaming mode ('all' or 'stream') use this to adjust for RAM shortage
         """
+
         self.fpath = fpath
         self.source_data = None
         self.thread_data = None
         self.stream = True if mode == 'stream' else False
     
+
     def load_data(self, size = None):
+
         """ Streams a data block back to the caller."""
         if self.stream:
             return self.__data_stream()
         else:
+
             return (self.__data_load_all(size), self.__data_load_val())
 
     def __data_load_all(self, size):
+
         """ Returns all data from the input folder."""
         ftrain = Path(self.fpath) / "train"
         train_p = open(ftrain, 'rb')
@@ -57,7 +66,9 @@ class CifarData:
         data = self.__normalize(data)
         self.source_data = data
         train_data = {'x_train': [], 'y_train': []}
+
         aug_data = self.augment(size)
+
         for item in aug_data:
             train_data['x_train'].extend(item['x_train'])
             train_data['y_train'].extend(item['y_train'])
@@ -76,12 +87,14 @@ class CifarData:
          
     def __normalize(self, data):
         """ Normalizes the training data x-values """
+
         keys = list(data.keys())
         for k in keys:
             data[k] = (np.array(data[k]) - 128) / 128    
         return data
     
     def augment(self, size = None):
+
         """ 
         Extends the data set through augmentation. 
 
@@ -89,6 +102,7 @@ class CifarData:
         memory errors that show up when running too many different ops 
         running on the same Spawn.        
         """
+
         if size is None:
             size = len(self.source_data['x_train'])
 
@@ -100,13 +114,16 @@ class CifarData:
                         range(size),
                         max_workers = CPU_LIMIT, 
                         chunksize = 3000))
+
         return r
     
     def _augment_thread_flip(self, i):
         ret = {"x_train": [], "y_train": []}
         img = self.source_data['x_train'][i]
         fimg = np.fliplr(img)
+
         for j in range(R):
+
             rfimg = rotate(fimg, j*90).reshape(1, 32, 32, 3)
             ret['y_train'].append(self.source_data['y_train'][i])
             ret['x_train'].append(rfimg)
@@ -116,7 +133,9 @@ class CifarData:
         """ Threaded processing function. """
         ret = {"x_train": [], "y_train": []}
         img = self.source_data['x_train'][i]
+
         for j in range(R):
+
             rimg = rotate(img, j*90).reshape(1, 32, 32, 3)
             ret['y_train'].append(self.source_data['y_train'][i])
             ret['x_train'].append(rimg)
