@@ -14,6 +14,7 @@ from tqdm.contrib.concurrent import process_map
 from itertools import chain
 
 CPU_LIMIT = mp.cpu_count() - 1 # reserve 1 core for the OS
+DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python"
 R = 4
 
 class CifarData:
@@ -24,16 +25,14 @@ class CifarData:
     to the CIFAR datasets as well as the ability to load, augment, and stream
     data batches on demand.
     """
-    def __init__(self, n_cores, fpath, mode = 'all'):
+    def __init__(self, fpath = DATA_PATH, mode = 'all'):
         """ 
         Initialized the CifarData Class.
 
         Args:
-            :param int n_cores: The number of CPU cores to allocate
             :param str fpath: The path to train andtest data
             :param str mode: The data streaming mode ('all' or 'stream') use this to adjust for RAM shortage
         """
-        self.n_cpu = n_cores
         self.fpath = fpath
         self.source_data = None
         self.thread_data = None
@@ -77,9 +76,9 @@ class CifarData:
          
     def __normalize(self, data):
         """ Normalizes the training data x-values """
-        key = list(data.keys())[0]
-        for i in range(len(key)):
-            data[key][i] = (data[key][i] - 128) / 128    
+        keys = list(data.keys())
+        for k in keys:
+            data[k] = (np.array(data[k]) - 128) / 128    
         return data
     
     def augment(self, size = None):
