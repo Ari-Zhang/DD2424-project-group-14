@@ -51,6 +51,7 @@ class SAPNet:
         else:
             return self.model(x)
 
+    @tf.function
     def stochastic_pruning(self, x, r):
         """
         Runs the stochastic activation prunning as defined by 
@@ -72,13 +73,15 @@ class SAPNet:
             if type(layer) is not LAYER_INPUT_TYPE:
                 print(type(layer))
                 h = layer(h)
-                h = h.numpy()
-                #p = h / np.sum(h)
-                ratio_arr = np.zeros_like(h.flatten())
-                ratio_arr[:int((1 - r)*len(ratio_arr))] = 1
-                np.random.shuffle(ratio_arr)
-                h = h*ratio_arr.reshape(h.shape)
-                #h = h / (1 - (1 - p))
+                h_flat = tf.reshape(h, [-1, 1])
+                ind = tf.range(tf.constant(0), tf.multiply(tf.size(h_flat, out_type = tf.float32), tf.subtract(tf.constant(1, dtype = tf.float32), r)))
+                ind = tf.reshape(ind, [-1, 1])
+                ind = tf.cast(ind, tf.int32)
+                upt = tf.ones(tf.size(ind))
+                shape = tf.reshape(tf.constant(tf.size(h_flat)), [-1])
+                scatter = tf.random.shuffle(tf.scatter_nd(ind, upt, shape))
+                pruning = tf.reshape(scatter, tf.shape(h))
+                h = tf.multiply(h, pruning)
         return h
 
     def shape_td(self, train_data, val_data):
