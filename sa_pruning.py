@@ -57,12 +57,6 @@ class SAPNet:
         Runs the stochastic activation prunning as defined by 
         (Dhillon et al., 2018).
 
-        Do not use this function for training the network as using this during
-        training does not provide any additional benefits. Also this implementation
-        is extremely slow (> 100 times slower) because we coded on CPU (numpy) instead
-        of GPU due to time restraints. So only use this function to evaluate if we
-        can observe a difference in adversarial attack performance. 
-
         Args:
             :param x: Input data to the first layer
             :param r: percent of activtions to keep
