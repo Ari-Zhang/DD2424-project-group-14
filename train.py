@@ -4,6 +4,7 @@ from tensorflow.keras import callbacks
 from data import CifarData
 from network import Network
 import tqdm
+import argparse
 import numpy as np
 import concurrent.futures
 import matplotlib.pyplot as plt
@@ -14,9 +15,15 @@ from pathlib import Path
 
 mirrored_strategy = tf.distribute.MirroredStrategy()
 
+ap = argparse.ArgumentParser()
+ap.add_argument("-epochs", "--epochs", type=int, required=True, help="how many epochs to train for")
+ap.add_argument("-batchsize", "--batchsize", type=int, required=True, help="what batchsize touse")
+args = vars(ap.parse_args())
+
+
 CKPT_FOLDER = "PLACEHOLDER"
-BATCH_SIZE = 400
-EPOCHS = 10
+BATCH_SIZE = args['batchsize']
+EPOCHS = args['epochs']
 LMDA_L1 = .0005
 LMDA_L2 = .001
 LMBDA_ACTIVITY = None #tf.keras.regularizers.L1(l1 = LMDA_L1)
@@ -253,14 +260,15 @@ if __name__ == "__main__":
         # ==================================================================
         #                  Hyperparam Tuning
         # ------------------------------------------------------------------ 
-        """
+
         h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
             epochs = EPOCHS, validation_data = (x_val, y_val),
             callbacks = [ckpt])
+
         """
         h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
                 x_val = x_val, y_val = y_val, shuffle=True)
-
+        """
         # ================================================================== 
 
         print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
