@@ -91,7 +91,7 @@ class CifarData:
             data[k] = np.array(data[k])[idxes]
         return data
     
-    def augment(self, size = None):
+    def augment(self, size = -1):
         """ 
         Extends the data set through augmentation. 
 
@@ -99,7 +99,7 @@ class CifarData:
         memory errors that show up when running too many different ops 
         running on the same Spawn.        
         """
-        if size is None:
+        if size is -1:
             size = len(self.source_data['x_train'])
 
         r = (process_map(self._augment_thread_rotate,
