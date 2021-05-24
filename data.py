@@ -25,7 +25,7 @@ class CifarData:
     to the CIFAR datasets as well as the ability to load, augment, and stream
     data batches on demand.
     """
-    def __init__(self, fpath = DATA_PATH, mode = 'all'):
+    def __init__(self, fpath = DATA_PATH, mode = 'all', cnk = 1000, cpulim = 2):
         """ 
         Initialized the CifarData Class.
 
@@ -33,6 +33,8 @@ class CifarData:
             :param str fpath: The path to train andtest data
             :param str mode: The data streaming mode ('all' or 'stream') use this to adjust for RAM shortage
         """
+        self.CPU_LIMIT = cpulim
+        self.CNK = cnk
         self.fpath = fpath
         self.source_data = None
         self.thread_data = None
@@ -104,12 +106,12 @@ class CifarData:
 
         r = (process_map(self._augment_thread_rotate,
                         range(size),
-                        max_workers = CPU_LIMIT, 
-                        chunksize = 800))       
+                        max_workers = self.CPU_LIMIT, 
+                        chunksize = self.CHUNKS))       
         r.extend(process_map(self._augment_thread_flip,
                         range(size),
                         max_workers = CPU_LIMIT, 
-                        chunksize = 800))
+                        chunksize = self.CHUNKS))
         return r
     
     def _augment_thread_flip(self, i):

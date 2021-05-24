@@ -19,9 +19,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-epochs", "--epochs", type=int, required=True, help="how many epochs to train for")
 ap.add_argument("-batchsize", "--batchsize", type=int, required=True, help="what batchsize to use")
 ap.add_argument("-size", "--size", type=int, required=True, help="amount of data to train on")
+ap.add_argument("-cpulim", "--cpulim", type=int, required=True, help="amount of data to train on")
+ap.add_argument("-cnksize", "--cnksize", type=int, required=True, help="amount of data to train on")
 args = vars(ap.parse_args())
 
 SIZE = args['size']
+CPU_LIMIT = args['cpulim']
+CHUNK_SIZE = args['cnksize']
 CKPT_FOLDER = "PLACEHOLDER"
 BATCH_SIZE = args['batchsize']
 GLOBAL_BATCH_SIZE = BATCH_SIZE * strategy.num_replicas_in_sync
@@ -179,7 +183,7 @@ if __name__ == "__main__":
         n = Network()
         n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY, optimizer = tf.keras.optimizers.Adam(lr=3e-4),
             loss_fn = None)
-        cifar = CifarData()
+        cifar = CifarData(cnk = CHUNK_SIZE, cpulim = CPU_LIMIT)
         ckpt = tf.keras.callbacks.ModelCheckpoint(
                 filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
                 verbose = 1, save_best_only = True, save_weights_only = False
