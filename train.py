@@ -12,8 +12,8 @@ import tensorflow as tf
 import os
 from pathlib import Path
 
-DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python"
-CKPT_FOLDER = "D:\\KTH\\courses\\dd2424\\projects\\model\\ckpts"
+mirrored_strategy = tf.distribute.MirroredStrategy()
+
 BATCH_SIZE = 400
 EPOCHS = 10
 LMDA_L1 = .0005
@@ -176,32 +176,33 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
     x_val_batches, y_val_batches = batch_data(x_val, y_val, batch_size)
     history = {'acc': [], 'val_acc': [], 'loss': [], 'val_loss': []}
     
-    for epoch in range(epochs):
-        tmp_acc = 0
-        tmp_val_acc = 0
-        tmp_loss = 0
-        tmp_val_loss = 0
-        print(f"\nEpoch: {epoch+1} out of {epochs}")
-        if shuffle and epoch > 0:
-            x_batches, y_batches = shuffle_data(x, y, batch_size)
+    with mirrored_strategy.scope():
+        for epoch in range(epochs):
+            tmp_acc = 0
+            tmp_val_acc = 0
+            tmp_loss = 0
+            tmp_val_loss = 0
+            print(f"\nEpoch: {epoch+1} out of {epochs}")
+            if shuffle and epoch > 0:
+                x_batches, y_batches = shuffle_data(x, y, batch_size)
 
-        for ix, (xb, yb) in enumerate(zip(x_batches, y_batches)):
-            loss_value, acc = train_step(model, xb, yb)
-            tmp_acc += acc
-            tmp_loss += loss_value
-            print(f"[{ix+1} / {len(x_batches)}] acc: {acc} - loss: {loss_value}", end = '\r')
-        
-        for xv, yv in zip(x_val_batches, y_val_batches):
-            val_loss, val_acc = val_step(model, xv, yv)
-            tmp_val_acc += val_acc
-            tmp_val_loss += val_loss
-                 
-        history['acc'].append(tmp_acc / len(x_batches))
-        history['val_acc'].append(tmp_val_acc / len(x_val_batches))
-        history['loss'].append(tmp_loss / len(x_batches))
-        history['val_loss'].append(tmp_val_loss / len(x_val_batches))
+            for ix, (xb, yb) in enumerate(zip(x_batches, y_batches)):
+                loss_value, acc = train_step(model, xb, yb)
+                tmp_acc += acc
+                tmp_loss += loss_value
+                print(f"[{ix+1} / {len(x_batches)}] acc: {acc} - loss: {loss_value}", end = '\r')
+            
+            for xv, yv in zip(x_val_batches, y_val_batches):
+                val_loss, val_acc = val_step(model, xv, yv)
+                tmp_val_acc += val_acc
+                tmp_val_loss += val_loss
+                    
+            history['acc'].append(tmp_acc / len(x_batches))
+            history['val_acc'].append(tmp_val_acc / len(x_val_batches))
+            history['loss'].append(tmp_loss / len(x_batches))
+            history['val_loss'].append(tmp_val_loss / len(x_val_batches))
 
-        print(f"Training Loss: {loss_value}, Training Accuracy: {history['acc'][-1]}, Validation Loss: {val_loss}, Validation Accuracy: {history['val_acc'][-1]}")
+            print(f"Training Loss: {loss_value}, Training Accuracy: {history['acc'][-1]}, Validation Loss: {val_loss}, Validation Accuracy: {history['val_acc'][-1]}")
     return history
      
 
