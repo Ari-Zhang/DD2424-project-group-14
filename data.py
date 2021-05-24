@@ -13,8 +13,8 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 from itertools import chain
 
-CPU_LIMIT = mp.cpu_count() - 1 # reserve 1 core for the OS
-DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python"
+CPU_LIMIT = mp.cpu_count() # reserve 1 core for the OS
+DATA_PATH = "/home/paratastic/dd2424/DD2424-project-group-14/data/cifar-100-python/"
 R = 8
 
 class CifarData:
