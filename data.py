@@ -105,11 +105,11 @@ class CifarData:
         r = (process_map(self._augment_thread_rotate,
                         range(size),
                         max_workers = CPU_LIMIT, 
-                        chunksize = 3000))       
+                        chunksize = 800))       
         r.extend(process_map(self._augment_thread_flip,
                         range(size),
                         max_workers = CPU_LIMIT, 
-                        chunksize = 3000))
+                        chunksize = 800))
         return r
     
     def _augment_thread_flip(self, i):
