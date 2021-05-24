@@ -1,6 +1,5 @@
 """ Sequence for training and hyperparam tuning."""
 
-from model.train_with_dd import CKPT_FOLDER
 from tensorflow.keras import callbacks
 from data import CifarData
 from network import Network
