@@ -102,19 +102,19 @@ def accuracy(y, logits):
     return tf.math.divide(zeros, tf.size(delta))
 
 @tf.function
-def train_step(model, x, y):
+def train_step(model, x, y, loss_obj, batch_size):
     with tf.GradientTape() as tape:
         logits = model.model(x, training = True)
-        loss_value = model.loss_fun(y, logits)
+        loss_value = tf.reduce_sum(loss_obj(y, logits)) * (1. / batch_size)
         grads = tape.gradient(loss_value, model.model.trainable_weights)
         model.optimizer.apply_gradients(zip(grads, model.model.trainable_weights))
         acc = accuracy(y, logits)
     return loss_value, acc
 
 @tf.function
-def val_step(model, x, y):
+def val_step(model, x, y, loss_obj, batch_size):
     val_logits = model.model(x, training = False)
-    val_loss = model.loss_fun(y, val_logits)
+    val_loss = tf.reduce_sum(loss_obj(y, val_logits)) * (1. / batch_size)
     val_acc = accuracy(y, val_logits)
     return val_loss, val_acc
 
@@ -177,6 +177,8 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
     history = {'acc': [], 'val_acc': [], 'loss': [], 'val_loss': []}
     
     with mirrored_strategy.scope():
+        loss_obj = tf.keras.losses.CategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
+
         for epoch in range(epochs):
             tmp_acc = 0
             tmp_val_acc = 0
@@ -187,13 +189,13 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
                 x_batches, y_batches = shuffle_data(x, y, batch_size)
 
             for ix, (xb, yb) in enumerate(zip(x_batches, y_batches)):
-                loss_value, acc = train_step(model, xb, yb)
+                loss_value, acc = train_step(model, xb, yb, loss_obj, batch_size)
                 tmp_acc += acc
                 tmp_loss += loss_value
                 print(f"[{ix+1} / {len(x_batches)}] acc: {acc} - loss: {loss_value}", end = '\r')
             
             for xv, yv in zip(x_val_batches, y_val_batches):
-                val_loss, val_acc = val_step(model, xv, yv)
+                val_loss, val_acc = val_step(model, xv, yv, loss_obj, batch_size)
                 tmp_val_acc += val_acc
                 tmp_val_loss += val_loss
                     
