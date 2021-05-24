@@ -14,8 +14,8 @@ from tqdm.contrib.concurrent import process_map
 from itertools import chain
 
 CPU_LIMIT = mp.cpu_count() # reserve 1 core for the OS
-DATA_PATH = "/home/paratastic/dd2424/DD2424-project-group-14/data/cifar-100-python/"
-R = 8
+DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python\\"
+R = 6
 
 class CifarData:
     """ 
@@ -101,17 +101,17 @@ class CifarData:
         memory errors that show up when running too many different ops 
         running on the same Spawn.        
         """
-        if size is -1:
+        if size == -1:
             size = len(self.source_data['x_train'])
 
         r = (process_map(self._augment_thread_rotate,
                         range(size),
-                        max_workers = self.CPU_LIMIT, 
-                        chunksize = self.CHUNKS))       
+                        max_workers = CPU_LIMIT, 
+                        chunksize = 1000))       
         r.extend(process_map(self._augment_thread_flip,
                         range(size),
                         max_workers = CPU_LIMIT, 
-                        chunksize = self.CHUNKS))
+                        chunksize = 1000))
         return r
     
     def _augment_thread_flip(self, i):
