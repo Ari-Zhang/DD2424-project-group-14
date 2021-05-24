@@ -34,7 +34,7 @@ class CifarData:
             :param str mode: The data streaming mode ('all' or 'stream') use this to adjust for RAM shortage
         """
         self.CPU_LIMIT = cpulim
-        self.CNK = cnk
+        self.CHUNKS = cnk
         self.fpath = fpath
         self.source_data = None
         self.thread_data = None
