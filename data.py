@@ -15,7 +15,7 @@ from itertools import chain
 
 CPU_LIMIT = mp.cpu_count() - 1 # reserve 1 core for the OS
 DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python"
-R = 4
+R = 8
 
 class CifarData:
     """ 
@@ -115,8 +115,9 @@ class CifarData:
     def _augment_thread_flip(self, i):
         ret = {"x_train": [], "y_train": []}
         img = self.source_data['x_train'][i]
-        fimg = np.fliplr(img)
+        fimg_og = np.fliplr(img)
         for j in range(R):
+            fimg = fimg_og.copy() * np.random.normal(1, 0.2, (1,))
             rfimg = rotate(fimg, j*90).reshape(1, 32, 32, 3)
             ret['y_train'].append(self.source_data['y_train'][i])
             ret['x_train'].append(rfimg)

@@ -1,6 +1,6 @@
 """ Sequence for training and hyperparam tuning."""
 
-from tensorflow.keras import callbacks
+from tensorflow.keras import callbacks, optimizers
 from data import CifarData
 from network import Network
 import tqdm
@@ -13,16 +13,18 @@ import tensorflow as tf
 import os
 from pathlib import Path
 
-mirrored_strategy = tf.distribute.MirroredStrategy()
+strategy = tf.distribute.MirroredStrategy()
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-epochs", "--epochs", type=int, required=True, help="how many epochs to train for")
-ap.add_argument("-batchsize", "--batchsize", type=int, required=True, help="what batchsize touse")
+ap.add_argument("-batchsize", "--batchsize", type=int, required=True, help="what batchsize to use")
+ap.add_argument("-size", "--size", type=int, required=True, help="amount of data to train on")
 args = vars(ap.parse_args())
 
-
+SIZE = args['size']
 CKPT_FOLDER = "PLACEHOLDER"
 BATCH_SIZE = args['batchsize']
+GLOBAL_BATCH_SIZE = BATCH_SIZE * strategy.num_replicas_in_sync
 EPOCHS = args['epochs']
 LMDA_L1 = .0005
 LMDA_L2 = .001
@@ -36,71 +38,6 @@ def ts_file():
 def ts():
     return dt.now().strftime("%Y-%m-%d %H:%M:%S.%f:")
 
-def coarse_search(lm_min, lm_max, h):
-    """
-    Coarse search for L2 (Lasso) regulization term.
-
-    Args:
-        :param float32 lm_min: Minimum Lambda to search for
-        :param float32 lm_max: Maximum Lambda to search for
-        :param float32 h: the interval between each lambda step
-    """
-    print(f"{ts()} I source/model/train.py] Starting training...")
-    ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
-    print(f"{ts()} I source/model/train.py] Built checkpoint folders")
-
-    
-    
-    fpath_ckpt =  ffolder_ckpt / "cp.ckpt"
-    print(f"{ts()} I source/model/train.py] Saving to {fpath_ckpt}")
-    
-    # ==================================================================
-    #                  INIT Classes and Parameters
-    # ------------------------------------------------------------------
-    n = Network()
-    n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY)
-    cifar = CifarData()
-    ckpt = tf.keras.callbacks.ModelCheckpoint(
-            filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
-            verbose = 1, save_best_only = True, save_weights_only = False
-    )
-    # ==================================================================
-
-    print(f"{ts()} I source/model/train.py] Loading Dataset ...")
-
-    # ==================================================================
-    #                  Load The Dataset
-    # ------------------------------------------------------------------   
-    train_data , val_data = cifar.load_data()   
-    x_train, y_train, x_val, y_val = n.shape_td(train_data, val_data)
-    # ==================================================================
-    
-    print(f"{ts()} I source/model/train.py] Dataset Loaded.")
-    print(f"{ts()} I soruce/model/train.py] Fitting Model ...")
-
-    # ==================================================================
-    #                  Hyperparam Tuning
-    # ------------------------------------------------------------------
-    
-    lgnd = []
-    for lm in np.arange(lm_min, lm_max, h):
-        ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL2_{lm}"
-        try:
-            os.makedirs(ffolder_ckpt)
-        except:
-            pass
-        n.construct(LMBDA_KERNEL, LMBDA_BIAS, lmda_activiy = tf.keras.regularizers.L1(l1 = lm)) 
-        h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
-            epochs = 10, validation_data = (x_val, y_val),
-            callbacks = [ckpt])
-        plt.plot(h.history['val_accuracy'])
-        lgnd.append(lm)
-    # ==================================================================
-
-    plt.title('Val Accuracy for Lambas for 24 epochs')
-    plt.legend(lgnd)
-    plt.show()
-
 @tf.function
 def accuracy(y, logits):
     argP = tf.math.argmax(logits, axis = 0)
@@ -113,7 +50,8 @@ def accuracy(y, logits):
 def train_step(model, x, y, loss_obj, batch_size):
     with tf.GradientTape() as tape:
         logits = model.model(x, training = True)
-        loss_value = tf.reduce_sum(loss_obj(y, logits)) * (1. / batch_size)
+        loss = loss_obj(y, logits)
+        loss_value = tf.nn.compute_average_loss(loss, global_batch_size=GLOBAL_BATCH_SIZE)
         grads = tape.gradient(loss_value, model.model.trainable_weights)
         model.optimizer.apply_gradients(zip(grads, model.model.trainable_weights))
         acc = accuracy(y, logits)
@@ -122,7 +60,8 @@ def train_step(model, x, y, loss_obj, batch_size):
 @tf.function
 def val_step(model, x, y, loss_obj, batch_size):
     val_logits = model.model(x, training = False)
-    val_loss = tf.reduce_sum(loss_obj(y, val_logits)) * (1. / batch_size)
+    loss = loss_obj(y, val_logits)
+    val_loss = tf.nn.compute_average_loss(loss, global_batch_size=GLOBAL_BATCH_SIZE)
     val_acc = accuracy(y, val_logits)
     return val_loss, val_acc
 
@@ -184,7 +123,8 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
     x_val_batches, y_val_batches = batch_data(x_val, y_val, batch_size)
     history = {'acc': [], 'val_acc': [], 'loss': [], 'val_loss': []}
     
-    loss_obj = tf.keras.losses.CategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
+    loss_obj = tf.keras.losses.CategoricalCrossentropy(from_logits=True,
+        reduction=tf.keras.losses.Reduction.NONE)
 
     for epoch in range(epochs):
         tmp_acc = 0
@@ -219,7 +159,7 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
 
 
 if __name__ == "__main__":
-    with mirrored_strategy.scope():
+    with strategy.scope():
 
         print(f"{ts()} I source/model/train.py] Starting training...")
         ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
@@ -237,7 +177,8 @@ if __name__ == "__main__":
         #                  INIT Classes and Parameters
         # ------------------------------------------------------------------
         n = Network()
-        n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY)
+        n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY, optimizer = tf.keras.optimizers.Adam(lr=3e-4),
+            loss_fn = None)
         cifar = CifarData()
         ckpt = tf.keras.callbacks.ModelCheckpoint(
                 filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
@@ -250,7 +191,7 @@ if __name__ == "__main__":
         # ==================================================================
         #                  Load The Dataset
         # ------------------------------------------------------------------   
-        train_data , val_data = cifar.load_data(size = 1000)   
+        train_data , val_data = cifar.load_data(size = SIZE)   
         x_train, y_train, x_val, y_val = n.shape_td(train_data, val_data)
         # ==================================================================
         
@@ -260,14 +201,18 @@ if __name__ == "__main__":
         # ==================================================================
         #                  Hyperparam Tuning
         # ------------------------------------------------------------------ 
-        """
+        
+        n.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=3e-4),
+            loss='categorical_crossentropy',
+            metrics=['acc'])
         h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
-            epochs = EPOCHS, validation_data = (x_val, y_val))
-
+            epochs = EPOCHS, validation_data = (x_val, y_val), shuffle = True,
+            steps_per_epoch = int(len(x_train) / GLOBAL_BATCH_SIZE))
+        h = h.history
         """
         h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
                 x_val = x_val, y_val = y_val, shuffle=True)
-
+        """
         # ================================================================== 
 
         print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
@@ -280,6 +225,7 @@ if __name__ == "__main__":
         plt.legend(['training', 'validation'])
         plt.title(f"Training Acc for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
         plt.savefig(f"{ts_file()}_acc.png")
+        plt.clf()
 
         plt.plot(h['loss'])
         plt.plot(h['val_loss'])

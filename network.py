@@ -1,11 +1,7 @@
 """ Config file for the Neural Network CNN architecture. """
 import tensorflow as tf
 import numpy as np
-from tensorflow.core.framework.versions_pb2 import DESCRIPTOR
 
-
-
-mirrored_strategy = tf.distribute.MirroredStrategy()
 class Network:
     def __init__(self,):
         self.__name__ = "NoobNet"
@@ -28,7 +24,7 @@ class Network:
         return x_train, y_train, x_val, y_val
     
     def construct(self, lmda_kernel = None, lmda_bias = None, lmda_activiy = None,
-        optimizer = tf.keras.optimizers.Adam(learning_rate = 3e-4), loss_fn = tf.keras.losses.CategoricalCrossentropy()):
+        optimizer = None, loss_fn = None):
         """ 
         Builds and Compiles the classifier.
 
