@@ -260,15 +260,14 @@ if __name__ == "__main__":
         # ==================================================================
         #                  Hyperparam Tuning
         # ------------------------------------------------------------------ 
-
+        """
         h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
-            epochs = EPOCHS, validation_data = (x_val, y_val),
-            callbacks = [ckpt])
+            epochs = EPOCHS, validation_data = (x_val, y_val))
 
         """
         h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
                 x_val = x_val, y_val = y_val, shuffle=True)
-        """
+
         # ================================================================== 
 
         print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
