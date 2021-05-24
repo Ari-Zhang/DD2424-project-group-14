@@ -7,6 +7,9 @@ class Network:
     def __init__(self,):
         self.__name__ = "NoobNet"
         self.model = None
+        self.optimizer = None
+        self.loss_fun = None
+        self.built = False
     
     def shape_td(self, train_data, val_data):
         """ Formats data dictionaries to return x, y values for the NN.
@@ -21,7 +24,8 @@ class Network:
         y_val = np.array([tf.one_hot(y, 100) for y in val_data['y_val']])
         return x_train, y_train, x_val, y_val
     
-    def construct(self, lmda_kernel = None, lmda_bias = None, lmda_activiy = None):
+    def construct(self, lmda_kernel = None, lmda_bias = None, lmda_activiy = None,
+        optimizer = tf.keras.optimizers.Adam(learning_rate = 3e-4), loss_fn = tf.keras.losses.CategoricalCrossentropy()):
         """ 
         Builds and Compiles the classifier.
 
@@ -44,24 +48,31 @@ class Network:
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(inpt)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(32, 5, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(32, 5, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy)(conv)
@@ -77,21 +88,27 @@ class Network:
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same", 
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(drpt1)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy, activation = 'relu')(conv)
+            activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
-            activity_regularizer = lmda_activiy)(conv)
+            activity_regularizer = lmda_activiy)(bnorm)
+        bnorm = tf.keras.layers.BatchNormalization()(conv)
         prelu = tf.keras.layers.PReLU()(conv)
         pool = tf.keras.layers.MaxPool2D(2,2)(prelu)
         bnorm = tf.keras.layers.BatchNormalization()(pool)
@@ -107,7 +124,8 @@ class Network:
         dense = tf.keras.layers.Dense(50, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(fltn2)
         prelu = tf.keras.layers.PReLU()(dense)
-        drpt = tf.keras.layers.Dropout(0.05)(prelu)
+        bnorm = tf.keras.layers.BatchNormalization()(prelu)
+        drpt = tf.keras.layers.Dropout(0.05)(bnorm)
         # -------------------------------------------------------------------
 
         # -------------------------------------------------------------------
@@ -116,7 +134,8 @@ class Network:
         dense = tf.keras.layers.Dense(300, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
-        drpt = tf.keras.layers.Dropout(0.05)(prelu)
+        bnorm = tf.keras.layers.BatchNormalization()(prelu)
+        drpt = tf.keras.layers.Dropout(0.05)(bnorm)
         # -------------------------------------------------------------------
 
         # -------------------------------------------------------------------
@@ -125,7 +144,8 @@ class Network:
         dense = tf.keras.layers.Dense(300, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
-        drpt = tf.keras.layers.Dropout(0.05)(prelu)
+        bnorm = tf.keras.layers.BatchNormalization()(prelu)
+        drpt = tf.keras.layers.Dropout(0.05)(bnorm)
         # -------------------------------------------------------------------
         
         # -------------------------------------------------------------------
@@ -134,6 +154,7 @@ class Network:
         dense = tf.keras.layers.Dense(500, kernel_regularizer = lmda_kernel,\
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
+        bnorm = tf.keras.layers.BatchNormalization()(prelu)
         # -------------------------------------------------------------------
         
         # -------------------------------------------------------------------
@@ -141,21 +162,17 @@ class Network:
         #
         otpt = tf.keras.layers.Dense(100, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy, 
-            activation = 'softmax')(prelu)
+            activation = 'softmax')(bnorm)
         # -------------------------------------------------------------------
 
 
         self.model = tf.keras.Model(inputs = inpt, outputs = otpt)
-        self.model.compile(
-            loss = tf.keras.losses.CategoricalCrossentropy(),
-            optimizer = tf.keras.optimizers.Adam(lr = 3e-4),
-            metrics = ['accuracy'],
-        )
+        self.loss_fun = loss_fn
+        self.optimizer = optimizer
+
         self.model.summary()
-        tf.keras.utils.plot_model(self.model, "model.png")
-
-
-
-        
-        
-
+        self.built = True
+        try:
+            tf.keras.utils.plot_model(self.model, "model.png")
+        except:
+            raise Warning("You have not installed graphviz so the model architecutre will not be plotted to a .png file!")

@@ -1,10 +1,4 @@
-""" 
-Network using Stochastic Activation Pruning 
-
-Compare this with defensive dropout and the normal
-CNN to see how we can defend agains adversarial
-attackers.
-"""
+""" Combined Network Class for Defenses """
 from numpy.core.numeric import indices
 import tensorflow as tf
 import numpy as np
@@ -15,7 +9,7 @@ from tensorflow.core.framework.versions_pb2 import DESCRIPTOR
 DROPOUT_TYPE = 'tensorflow.python.keras.layers.core.Dropout'
 LAYER_INPUT_TYPE = 'tensorflow.python.keras.engine.input_layer.InputLayer'
 
-class SAPNet:
+class DNet:
     def __init__(self,):
         self.__name__ = "NoobNet"
         self.model = None
@@ -23,8 +17,16 @@ class SAPNet:
         self.loss_fun = None
         self.built = False
 
+    def __call__(self, x, defense = None):
+        if defense == "DD":
+            return self.defensive_dropout(x)
+        elif defense == "SAP":
+            return self.stochastic_pruning(x, r = 0.9)
+        else:
+            return self.model(x)
+
     @tf.function
-    def __call__(self, x, defense = True):
+    def defensive_dropout(self, x, defense = True):
         """ 
         Runs inference on the nerual network.
 
