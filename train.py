@@ -177,35 +177,34 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
     x_val_batches, y_val_batches = batch_data(x_val, y_val, batch_size)
     history = {'acc': [], 'val_acc': [], 'loss': [], 'val_loss': []}
     
-    with mirrored_strategy.scope():
-        loss_obj = tf.keras.losses.CategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
+    loss_obj = tf.keras.losses.CategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
 
-        for epoch in range(epochs):
-            tmp_acc = 0
-            tmp_val_acc = 0
-            tmp_loss = 0
-            tmp_val_loss = 0
-            print(f"\nEpoch: {epoch+1} out of {epochs}")
-            if shuffle and epoch > 0:
-                x_batches, y_batches = shuffle_data(x, y, batch_size)
+    for epoch in range(epochs):
+        tmp_acc = 0
+        tmp_val_acc = 0
+        tmp_loss = 0
+        tmp_val_loss = 0
+        print(f"\nEpoch: {epoch+1} out of {epochs}")
+        if shuffle and epoch > 0:
+            x_batches, y_batches = shuffle_data(x, y, batch_size)
 
-            for ix, (xb, yb) in enumerate(zip(x_batches, y_batches)):
-                loss_value, acc = train_step(model, xb, yb, loss_obj, batch_size)
-                tmp_acc += acc
-                tmp_loss += loss_value
-                print(f"[{ix+1} / {len(x_batches)}] acc: {acc} - loss: {loss_value}", end = '\r')
-            
-            for xv, yv in zip(x_val_batches, y_val_batches):
-                val_loss, val_acc = val_step(model, xv, yv, loss_obj, batch_size)
-                tmp_val_acc += val_acc
-                tmp_val_loss += val_loss
-                    
-            history['acc'].append(tmp_acc / len(x_batches))
-            history['val_acc'].append(tmp_val_acc / len(x_val_batches))
-            history['loss'].append(tmp_loss / len(x_batches))
-            history['val_loss'].append(tmp_val_loss / len(x_val_batches))
+        for ix, (xb, yb) in enumerate(zip(x_batches, y_batches)):
+            loss_value, acc = train_step(model, xb, yb, loss_obj, batch_size)
+            tmp_acc += acc
+            tmp_loss += loss_value
+            print(f"[{ix+1} / {len(x_batches)}] acc: {acc} - loss: {loss_value}", end = '\r')
+        
+        for xv, yv in zip(x_val_batches, y_val_batches):
+            val_loss, val_acc = val_step(model, xv, yv, loss_obj, batch_size)
+            tmp_val_acc += val_acc
+            tmp_val_loss += val_loss
+                
+        history['acc'].append(tmp_acc / len(x_batches))
+        history['val_acc'].append(tmp_val_acc / len(x_val_batches))
+        history['loss'].append(tmp_loss / len(x_batches))
+        history['val_loss'].append(tmp_val_loss / len(x_val_batches))
 
-            print(f"Training Loss: {loss_value}, Training Accuracy: {history['acc'][-1]}, Validation Loss: {val_loss}, Validation Accuracy: {history['val_acc'][-1]}")
+        print(f"Training Loss: {loss_value}, Training Accuracy: {history['acc'][-1]}, Validation Loss: {val_loss}, Validation Accuracy: {history['val_acc'][-1]}")
     return history
      
 
@@ -213,74 +212,75 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
 
 
 if __name__ == "__main__":
+    with mirrored_strategy.scope():
 
-    print(f"{ts()} I source/model/train.py] Starting training...")
-    ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
-    print(f"{ts()} I source/model/train.py] Built checkpoint folders")
+        print(f"{ts()} I source/model/train.py] Starting training...")
+        ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
+        print(f"{ts()} I source/model/train.py] Built checkpoint folders")
 
-    try:
-        os.makedirs(ffolder_ckpt)
-    except:
-        pass
-    
-    fpath_ckpt =  ffolder_ckpt / "cp.ckpt"
-    print(f"{ts()} I source/model/train.py] Saving to {fpath_ckpt}")
-    
-    # ==================================================================
-    #                  INIT Classes and Parameters
-    # ------------------------------------------------------------------
-    n = Network()
-    n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY)
-    cifar = CifarData()
-    ckpt = tf.keras.callbacks.ModelCheckpoint(
-            filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
-            verbose = 1, save_best_only = True, save_weights_only = False
-    )
-    # ==================================================================
-
-    print(f"{ts()} I source/model/train.py] Loading Dataset ...")
-
-    # ==================================================================
-    #                  Load The Dataset
-    # ------------------------------------------------------------------   
-    train_data , val_data = cifar.load_data(size = 1000)   
-    x_train, y_train, x_val, y_val = n.shape_td(train_data, val_data)
-    # ==================================================================
-    
-    print(f"{ts()} I source/model/train.py] Dataset Loaded.")
-    print(f"{ts()} I soruce/model/train.py] Fitting Model ...")
-
-    # ==================================================================
-    #                  Hyperparam Tuning
-    # ------------------------------------------------------------------ 
-    """
-    h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
-        epochs = EPOCHS, validation_data = (x_val, y_val),
-        callbacks = [ckpt])
-    """
-    h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
-            x_val = x_val, y_val = y_val, shuffle=True)
-
-    # ================================================================== 
-
-    print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
+        try:
+            os.makedirs(ffolder_ckpt)
+        except:
+            pass
         
-    # ==================================================================
-    #                  Plotting
-    # ------------------------------------------------------------------ 
-    plt.plot(h['acc'])
-    plt.plot(h['val_acc'])
-    plt.legend(['training', 'validation'])
-    plt.title(f"Training Acc for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
-    plt.savefig(f"{ts_file()}_acc.png")
+        fpath_ckpt =  ffolder_ckpt / "cp.ckpt"
+        print(f"{ts()} I source/model/train.py] Saving to {fpath_ckpt}")
+        
+        # ==================================================================
+        #                  INIT Classes and Parameters
+        # ------------------------------------------------------------------
+        n = Network()
+        n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY)
+        cifar = CifarData()
+        ckpt = tf.keras.callbacks.ModelCheckpoint(
+                filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
+                verbose = 1, save_best_only = True, save_weights_only = False
+        )
+        # ==================================================================
 
-    plt.plot(h['loss'])
-    plt.plot(h['val_loss'])
-    plt.legend(['training', 'validation'])
-    plt.title(f"Training Loss for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
-    plt.savefig(f"{ts_file()}_loss.png")
-    # ==================================================================
+        print(f"{ts()} I source/model/train.py] Loading Dataset ...")
 
-    n.model.save(f"{ts_file()}_model.h5")
-    print("Finished train.py. Press any Key to exit...")
-    wait = input()
+        # ==================================================================
+        #                  Load The Dataset
+        # ------------------------------------------------------------------   
+        train_data , val_data = cifar.load_data(size = 1000)   
+        x_train, y_train, x_val, y_val = n.shape_td(train_data, val_data)
+        # ==================================================================
+        
+        print(f"{ts()} I source/model/train.py] Dataset Loaded.")
+        print(f"{ts()} I soruce/model/train.py] Fitting Model ...")
+
+        # ==================================================================
+        #                  Hyperparam Tuning
+        # ------------------------------------------------------------------ 
+        """
+        h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
+            epochs = EPOCHS, validation_data = (x_val, y_val),
+            callbacks = [ckpt])
+        """
+        h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
+                x_val = x_val, y_val = y_val, shuffle=True)
+
+        # ================================================================== 
+
+        print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
+            
+        # ==================================================================
+        #                  Plotting
+        # ------------------------------------------------------------------ 
+        plt.plot(h['acc'])
+        plt.plot(h['val_acc'])
+        plt.legend(['training', 'validation'])
+        plt.title(f"Training Acc for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
+        plt.savefig(f"{ts_file()}_acc.png")
+
+        plt.plot(h['loss'])
+        plt.plot(h['val_loss'])
+        plt.legend(['training', 'validation'])
+        plt.title(f"Training Loss for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
+        plt.savefig(f"{ts_file()}_loss.png")
+        # ==================================================================
+
+        n.model.save(f"{ts_file()}_model.h5")
+        print("Finished train.py. Press any Key to exit...")
+        wait = input()
