@@ -66,14 +66,14 @@ class CifarData:
         train_data = self.shuffle(train_data)
         return train_data
 
-    def __data_load_val(self, ):
+    def __data_load_test(self, ):
         fval = Path(self.fpath) / "test"
         test_p = open(fval, 'rb')
         test = pickle.load(test_p, encoding = "bytes")
-        data = {"x_val": test[b'data'], "y_val": test[b'coarse_labels']}
-        data['x_val'] = data['x_val'].reshape((-1, 3, 32, 32))
-        data['x_val'] = data['x_val'].T.astype(float)
-        data['x_val'] = np.moveaxis(data['x_val'], -1, 0) # we need the last axis to be first to iterate over the data array
+        data = {"x_test": test[b'data'], "y_test": test[b'coarse_labels']}
+        data['x_test'] = data['x_test'].reshape((-1, 3, 32, 32))
+        data['x_test'] = data['x_test'].T.astype(float)
+        data['x_test'] = np.moveaxis(data['x_test'], -1, 0) # we need the last axis to be first to iterate over the data array
         data = self.__normalize(data)
         return data
          

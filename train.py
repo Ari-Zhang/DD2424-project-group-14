@@ -2,7 +2,7 @@
 
 from tensorflow.keras import callbacks, optimizers
 from data import CifarData
-from network import Network
+from defense import DNet as Network
 import pickle
 import tqdm
 import argparse
@@ -14,8 +14,6 @@ import tensorflow as tf
 import os
 from pathlib import Path
 
-strategy = tf.distribute.MirroredStrategy()
-
 ap = argparse.ArgumentParser()
 ap.add_argument("-epochs", "--epochs", type=int, required=True, help="how many epochs to train for")
 ap.add_argument("-batchsize", "--batchsize", type=int, required=True, help="what batchsize to use")
@@ -23,7 +21,6 @@ args = vars(ap.parse_args())
 
 CKPT_FOLDER = "PLACEHOLDER"
 BATCH_SIZE = args['batchsize']
-GLOBAL_BATCH_SIZE = BATCH_SIZE * strategy.num_replicas_in_sync
 EPOCHS = args['epochs']
 LMDA_L1 = .0005
 LMDA_L2 = .001
@@ -158,85 +155,91 @@ def fit(model, x, y, batch_size, epochs, x_val, y_val, shuffle = True):
 
 
 if __name__ == "__main__":
-    with strategy.scope():
+    #with strategy.scope():
 
-        print(f"{ts()} I source/model/train.py] Starting training...")
-        ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
-        print(f"{ts()} I source/model/train.py] Built checkpoint folders")
+    print(f"{ts()} I source/model/train.py] Starting training...")
+    ffolder_ckpt = Path(CKPT_FOLDER) / f"batch_size_{BATCH_SIZE}" / f"LambdaL1_{LMDA_L1}"
+    print(f"{ts()} I source/model/train.py] Built checkpoint folders")
 
-        try:
-            os.makedirs(ffolder_ckpt)
-        except:
-            pass
+    try:
+        os.makedirs(ffolder_ckpt)
+    except:
+        pass
+    
+    fpath_ckpt =  ffolder_ckpt / "cp.ckpt"
+    print(f"{ts()} I source/model/train.py] Saving to {fpath_ckpt}")
+    
+    # ==================================================================
+    #                  INIT Classes and Parameters
+    # ------------------------------------------------------------------
+    n = Network()
+    n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY, optimizer = tf.keras.optimizers.Adam(lr=3e-4),
+        loss_fn = None)
+    cifar = CifarData()
+    ckpt = tf.keras.callbacks.ModelCheckpoint(
+            filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
+            verbose = 1, save_best_only = True, save_weights_only = False
+    )
+    # ==================================================================
+
+    print(f"{ts()} I source/model/train.py] Loading Dataset ...")
+
+    # ==================================================================
+    #                  Load The Dataset
+    # ------------------------------------------------------------------   
+    train_data , val_data = cifar.load_data(size = -1) 
+    """
+    with open("dataset.p", "rb") as file:
+        dataset = pickle.load(file)
+    train_data = dataset[0]
+    val_data = dataset[1]
+    """
+    x_train, y_train, x_test, y_test = n.shape_td(train_data, val_data)
+    x_val = x_train[int(len(x_train*.75)):]
+    y_val = y_train[int(len(x_train*.75)):]
+    x_train = x_train[:int(len(x_train*.75))]
+    y_train = y_train[:int(len(x_train*.75))]
+    # ==================================================================
+    
+    print(f"{ts()} I source/model/train.py] Dataset Loaded.")
+    print(f"{ts()} I soruce/model/train.py] Fitting Model ...")
+
+    # ==================================================================
+    #                  Hyperparam Tuning
+    # ------------------------------------------------------------------ 
+    
+    n.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=3e-4),
+        loss='categorical_crossentropy',
+        metrics=['acc'])
+    h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
+        epochs = EPOCHS, validation_data = (x_val, y_val), shuffle = True,
+        steps_per_epoch = int(len(x_train) / BATCH_SIZE))
+    h = h.history
+    """
+    h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
+            x_val = x_val, y_val = y_val, shuffle=True)
+    """
+    # ================================================================== 
+
+    print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
         
-        fpath_ckpt =  ffolder_ckpt / "cp.ckpt"
-        print(f"{ts()} I source/model/train.py] Saving to {fpath_ckpt}")
-        
-        # ==================================================================
-        #                  INIT Classes and Parameters
-        # ------------------------------------------------------------------
-        n = Network()
-        n.construct(LMBDA_KERNEL, LMBDA_BIAS, LMBDA_ACTIVITY, optimizer = tf.keras.optimizers.Adam(lr=3e-4),
-            loss_fn = None)
-        #cifar = CifarData(cnk = CHUNK_SIZE, cpulim = CPU_LIMIT)
-        ckpt = tf.keras.callbacks.ModelCheckpoint(
-                filepath = fpath_ckpt, monitor = 'val_loss', mode = 'min',
-                verbose = 1, save_best_only = True, save_weights_only = False
-        )
-        # ==================================================================
+    # ==================================================================
+    #                  Plotting
+    # ------------------------------------------------------------------ 
+    plt.plot(h['acc'])
+    plt.plot(h['val_acc'])
+    plt.legend(['training', 'validation'])
+    plt.title(f"Training Acc for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
+    plt.savefig(f"{ts_file()}_acc.png")
+    plt.clf()
 
-        print(f"{ts()} I source/model/train.py] Loading Dataset ...")
+    plt.plot(h['loss'])
+    plt.plot(h['val_loss'])
+    plt.legend(['training', 'validation'])
+    plt.title(f"Training Loss for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
+    plt.savefig(f"{ts_file()}_loss.png")
+    # ==================================================================
 
-        # ==================================================================
-        #                  Load The Dataset
-        # ------------------------------------------------------------------   
-        #train_data , val_data = cifar.load_data(size = -1) 
-        with open("dataset.p", "rb") as file:
-            dataset = pickle.load(file)
-        train_data = dataset[0]
-        val_data = dataset[1]
-        x_train, y_train, x_val, y_val = n.shape_td(train_data, val_data)
-        # ==================================================================
-        
-        print(f"{ts()} I source/model/train.py] Dataset Loaded.")
-        print(f"{ts()} I soruce/model/train.py] Fitting Model ...")
-
-        # ==================================================================
-        #                  Hyperparam Tuning
-        # ------------------------------------------------------------------ 
-        
-        n.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=3e-4),
-            loss='categorical_crossentropy',
-            metrics=['acc'])
-        h = n.model.fit(x_train, y_train, batch_size = BATCH_SIZE,
-            epochs = EPOCHS, validation_data = (x_val, y_val), shuffle = True,
-            steps_per_epoch = int(len(x_train) / GLOBAL_BATCH_SIZE))
-        h = h.history
-        """
-        h = fit(n, x_train, y_train, batch_size=BATCH_SIZE, epochs=EPOCHS,
-                x_val = x_val, y_val = y_val, shuffle=True)
-        """
-        # ================================================================== 
-
-        print(f"{ts()} I source/model/train.py] Hyperparameter tuned. Plotting results...")
-            
-        # ==================================================================
-        #                  Plotting
-        # ------------------------------------------------------------------ 
-        plt.plot(h['acc'])
-        plt.plot(h['val_acc'])
-        plt.legend(['training', 'validation'])
-        plt.title(f"Training Acc for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
-        plt.savefig(f"{ts_file()}_acc.png")
-        plt.clf()
-
-        plt.plot(h['loss'])
-        plt.plot(h['val_loss'])
-        plt.legend(['training', 'validation'])
-        plt.title(f"Training Loss for {EPOCHS} Epochs with {BATCH_SIZE} batch size.")
-        plt.savefig(f"{ts_file()}_loss.png")
-        # ==================================================================
-
-        n.model.save(f"{ts_file()}_model.h5")
-        print("Finished train.py. Press any Key to exit...")
-        wait = input()
+    n.model.save(f"{ts_file()}_model.h5")
+    print("Finished train.py. Press any Key to exit...")
+    wait = input()
