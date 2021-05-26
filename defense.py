@@ -1,13 +1,15 @@
 """ Combined Network Class for Defenses """
 from numpy.core.numeric import indices
 import tensorflow as tf
+import tensorflow_probability as tfp
 import numpy as np
+import sys
 from tensorflow.python.ops.gen_array_ops import zeros_like
 from tqdm import tqdm
 from tensorflow.core.framework.versions_pb2 import DESCRIPTOR
 
-DROPOUT_TYPE = 'tensorflow.python.keras.layers.core.Dropout'
-LAYER_INPUT_TYPE = 'tensorflow.python.keras.engine.input_layer.InputLayer'
+DROPOUT_TYPE = type(tf.keras.layers.core.Dropout(.1))
+LAYER_INPUT_TYPE = type(tf.keras.layers.Input(shape = (32,32)))
 
 class DNet:
     def __init__(self,):
@@ -28,19 +30,19 @@ class DNet:
     @tf.function
     def defensive_dropout(self, x, defense = True):
         """ 
-        Runs inference on the nerual network.
+            Runs inference on the nerual network.
 
-        We do this by specifically by tricking the batch normalization
-        layer into thinking that the network is being run in training
-        mode. This causes the batchNorm layer to normalize the outputs.
-        All other layers still perform inference as they normally would.
+            We do this by specifically by tricking the batch normalization
+            layer into thinking that the network is being run in training
+            mode. This causes the batchNorm layer to normalize the outputs.
+            All other layers still perform inference as they normally would.
 
-        Args:
-            :param np.ndarray x: The input data
-            :param bool defense: Whether or not to use defensive dropout
-        
-        Returns:
-            :np.ndarray preds: the output of the network inference
+            Args:
+                :param np.ndarray x: The input data
+                :param bool defense: Whether or not to use defensive dropout
+            
+            Returns:
+                :np.ndarray preds: the output of the network inference
         """
         if defense:
             for ix, layer in enumerate(self.model.layers):
@@ -57,28 +59,56 @@ class DNet:
     @tf.function
     def stochastic_pruning(self, x, r):
         """
-        Runs the stochastic activation prunning as defined by 
-        (Dhillon et al., 2018).
+            Runs the stochastic activation prunning as defined by 
+            (Dhillon et al., 2018).
 
-        Args:
-            :param x: Input data to the first layer
-            :param r: percent of activtions to keep
+            Args:
+                :param x: Input data to the first layer
+                :param r: percent of activtions to keep
         """
         assert r <= 1
         h = x
+        power = tf.constant(r, dtype=tf.float32)
         for layer in self.model.layers:
-            if type(layer) is not LAYER_INPUT_TYPE:
+            if type(layer) != LAYER_INPUT_TYPE:
+                samples = []
                 print(type(layer))
                 h = layer(h)
                 h_flat = tf.reshape(h, [-1, 1])
-                ind = tf.range(tf.constant(0), tf.multiply(tf.size(h_flat, out_type = tf.float32), tf.subtract(tf.constant(1, dtype = tf.float32), r)))
-                ind = tf.reshape(ind, [-1, 1])
-                ind = tf.cast(ind, tf.int32)
-                upt = tf.ones(tf.size(ind))
-                shape = tf.reshape(tf.constant(tf.size(h_flat)), [-1])
-                scatter = tf.random.shuffle(tf.scatter_nd(ind, upt, shape))
-                pruning = tf.reshape(scatter, tf.shape(h))
-                h = tf.multiply(h, pruning)
+                h_sum = tf.math.reduce_sum(h_flat)
+                p_flat = tf.reshape(tf.divide(tf.math.abs(h_flat), h_sum), [-1, 1])
+                """
+                #print(p_flat)
+                dist = tfp.distributions.Categorical(probs = p_flat)
+                samp = tfp.distributions.Sample(dist, sample_shape = len(h))
+                samples = samp.sample()
+                new_h = tf.gather(h_flat, samples)
+                """
+                samples = tf.zeros_like(h_flat)
+                for jx in range(int(r*len(h_flat))):
+                    print(f"{jx} / {int(r*len(h_flat))}", end = '\r')
+                    samples = tf.add(tf.cast(tf.random.categorical(p_flat, 1), tf.float32), samples)
+
+                a_one = tf.multiply(tf.ones_like(h_flat), tf.cast(samples, tf.float32))
+                samples = tf.minimum(samples, tf.ones_like(samples))
+                hij = tf.multiply(h_flat, tf.cast(samples, tf.float32))
+                pij = tf.multiply(p_flat, tf.cast(samples, tf.float32))
+                new_h = tf.divide(hij, tf.subtract(a_one, tf.pow(tf.subtract(a_one, pij), power)))
+
+                """
+                for ix, s in enumerate(samples):
+                    print(f"{ix}/ {len(samples)}", end='\r')
+                    a_one = tf.multiply(tf.ones_like(h_flat, dtype = tf.float32), tf.cast(s, tf.float32))
+                    hij = tf.multiply(h_flat, tf.cast(s, tf.float32))
+                    pij = tf.multiply(p_flat, tf.cast(s, tf.float32))
+                    fac = tf.divide(hij, tf.subtract(a_one, tf.pow(tf.subtract(a_one, pij), power)))
+                    new_h = tf.add(new_h, fac)
+                """
+                #new_h = tf.multiply(tf.cast(samples, tf.float32), h_flat)
+                #h = tf.reshape(new_h, tf.shape(h))
+                
+                h = tf.reshape(new_h, tf.shape(h))
+                
         return h
 
     def shape_td(self, train_data, val_data):
@@ -90,8 +120,8 @@ class DNet:
         """
         x_train = np.array(train_data['x_train']).reshape(-1, 32, 32, 3)
         x_val = np.array(val_data['x_val']).reshape(-1, 32, 32, 3)
-        y_train = np.array([tf.one_hot(y, 100) for y in train_data['y_train']])
-        y_val = np.array([tf.one_hot(y, 100) for y in val_data['y_val']])
+        y_train = np.array([tf.one_hot(y, 20) for y in train_data['y_train']])
+        y_val = np.array([tf.one_hot(y, 20) for y in val_data['y_val']])
         return x_train, y_train, x_val, y_val
     
     def load_model(self, fpath, weights_only = False):
@@ -130,35 +160,35 @@ class DNet:
         # -------------------------------------------------------------------
         # Convolutional Layer 
         #
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(inpt)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(32, 5, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 5, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(32, 5, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 5, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy)(conv)
         prelu = tf.keras.layers.PReLU()(conv)
@@ -170,27 +200,27 @@ class DNet:
         # -------------------------------------------------------------------
         # Convolutional Layer 
         #
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same", 
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same", 
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(drpt1)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy, activation = 'relu')(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
-        conv = tf.keras.layers.Conv2D(64, 3, (1, 1), padding = "same",
+        conv = tf.keras.layers.Conv2D(16, 3, (1, 1), padding = "same",
             kernel_regularizer = lmda_kernel, bias_regularizer = lmda_bias,
             activity_regularizer = lmda_activiy)(bnorm)
         bnorm = tf.keras.layers.BatchNormalization()(conv)
@@ -206,7 +236,7 @@ class DNet:
         # -------------------------------------------------------------------
         # Dense Layer 
         #
-        dense = tf.keras.layers.Dense(50, kernel_regularizer = lmda_kernel, 
+        dense = tf.keras.layers.Dense(60, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(fltn2)
         prelu = tf.keras.layers.PReLU()(dense)
         bnorm = tf.keras.layers.BatchNormalization()(prelu)
@@ -216,7 +246,7 @@ class DNet:
         # -------------------------------------------------------------------
         # Dense Layer 
         #
-        dense = tf.keras.layers.Dense(300, kernel_regularizer = lmda_kernel, 
+        dense = tf.keras.layers.Dense(60, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
         bnorm = tf.keras.layers.BatchNormalization()(prelu)
@@ -226,7 +256,7 @@ class DNet:
         # -------------------------------------------------------------------
         # Dense Layer 
         #
-        dense = tf.keras.layers.Dense(300, kernel_regularizer = lmda_kernel, 
+        dense = tf.keras.layers.Dense(60, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
         bnorm = tf.keras.layers.BatchNormalization()(prelu)
@@ -236,7 +266,7 @@ class DNet:
         # -------------------------------------------------------------------
         # Dense Layer 
         #
-        dense = tf.keras.layers.Dense(500, kernel_regularizer = lmda_kernel,\
+        dense = tf.keras.layers.Dense(60, kernel_regularizer = lmda_kernel,\
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy)(drpt)
         prelu = tf.keras.layers.PReLU()(dense)
         bnorm = tf.keras.layers.BatchNormalization()(prelu)
@@ -245,7 +275,7 @@ class DNet:
         # -------------------------------------------------------------------
         # Output Layer 
         #
-        otpt = tf.keras.layers.Dense(100, kernel_regularizer = lmda_kernel, 
+        otpt = tf.keras.layers.Dense(20, kernel_regularizer = lmda_kernel, 
             bias_regularizer = lmda_bias, activity_regularizer = lmda_activiy, 
             activation = 'softmax')(bnorm)
         # -------------------------------------------------------------------
@@ -261,7 +291,7 @@ class DNet:
             metrics = ['accuracy'],
         )
         """
-        self.model.summary()
+        #self.model.summary()
         self.built = True
         try:
             tf.keras.utils.plot_model(self.model, "model.png")

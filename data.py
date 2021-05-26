@@ -13,9 +13,9 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 from itertools import chain
 
-CPU_LIMIT = mp.cpu_count() # reserve 1 core for the OS
+CPU_LIMIT = mp.cpu_count() - 1 # reserve 1 core for the OS
 DATA_PATH = "D:\\KTH\\courses\\dd2424\\projects\\data\\cifar-100-python\\"
-R = 6
+R = 2
 
 class CifarData:
     """ 
@@ -52,7 +52,7 @@ class CifarData:
         ftrain = Path(self.fpath) / "train"
         train_p = open(ftrain, 'rb')
         train = pickle.load(train_p, encoding = "bytes")
-        data = {"x_train": train[b'data'], "y_train": train[b'fine_labels']}
+        data = {"x_train": train[b'data'], "y_train": train[b'coarse_labels']}
         data['x_train'] = data['x_train'].reshape((-1, 3, 32, 32))
         data['x_train'] = data['x_train'].T.astype(float)
         data['x_train'] = np.moveaxis(data['x_train'], -1, 0) # we need the last axis to be first to iterate over the data array
@@ -70,7 +70,7 @@ class CifarData:
         fval = Path(self.fpath) / "test"
         test_p = open(fval, 'rb')
         test = pickle.load(test_p, encoding = "bytes")
-        data = {"x_val": test[b'data'], "y_val": test[b'fine_labels']}
+        data = {"x_val": test[b'data'], "y_val": test[b'coarse_labels']}
         data['x_val'] = data['x_val'].reshape((-1, 3, 32, 32))
         data['x_val'] = data['x_val'].T.astype(float)
         data['x_val'] = np.moveaxis(data['x_val'], -1, 0) # we need the last axis to be first to iterate over the data array
@@ -106,12 +106,12 @@ class CifarData:
 
         r = (process_map(self._augment_thread_rotate,
                         range(size),
-                        max_workers = CPU_LIMIT, 
-                        chunksize = 1000))       
+                        max_workers = CPU_LIMIT - 1, 
+                        chunksize = 3000))       
         r.extend(process_map(self._augment_thread_flip,
                         range(size),
-                        max_workers = CPU_LIMIT, 
-                        chunksize = 1000))
+                        max_workers = CPU_LIMIT - 1, 
+                        chunksize = 3000))
         return r
     
     def _augment_thread_flip(self, i):
