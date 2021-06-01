@@ -85,7 +85,9 @@ def generate_image_adversary(model, image, label, eps=2/255.0):
     # Return the image adversary to the calling function
     return adversary
     
+
 def generate_adversaries(model, baseImage, delta, classIdx, defense, steps=50):
+
     """
         Generate binaries adversaries for the input image given a base model
         :param model: base model
@@ -107,6 +109,7 @@ def generate_adversaries(model, baseImage, delta, classIdx, defense, steps=50):
             # Run this newly constructed image tensor through the base model and calculate the loss with respect to the
             # original class index
             predictions = model(adversary, defense = defense)
+
             #print(predictions)
             loss = -sccLoss(tf.convert_to_tensor([classIdx]), predictions)
             # Check the loss value and display it in the terminal
@@ -131,7 +134,9 @@ ap = argparse.ArgumentParser()
 #ap.add_argument("-o", "--output", required=True, help="path to output adversarial image")
 ap.add_argument("-s", "--test-size", type=int, required=True, help="how many images you would like to run")
 ap.add_argument("-m", "--model", required=True, help="the model you would like to use")
+
 ap.add_argument("-d", "--defense", required=True,help="the defense you would like to test")
+
 args = vars(ap.parse_args())
 
 # Define the epsilon and learning rate constants
@@ -147,7 +152,9 @@ print("[INFO] Loading the pre-trained model...")
 
 #model = tf.keras.models.load_model("final.h5")
 model = tf.keras.models.load_model(args["model"])
+
 defense = args["defense"]
+
 
 # Initialize the optimizer and loss function
 optimizer = Adam(learning_rate=LR)
@@ -177,7 +184,9 @@ for image_index in np.random.choice(np.arange(0, len(trainX)), size=(test_size,)
     delta = tf.Variable(tf.zeros_like(baseImage), trainable=True)
 
     # Generate the perturbation vector to create the adversarial example of the base image
+
     deltaUpdated = generate_adversaries(model, baseImage, delta, defense, int(label))
+
 
     # Create the adversarial example, swap color channels and save the output image to disk
    
@@ -186,7 +195,9 @@ for image_index in np.random.choice(np.arange(0, len(trainX)), size=(test_size,)
     #preprocessedImage = preprocess_input(baseImage + deltaUpdated)
     adverImage = baseImage +  deltaUpdated
     #predictions = model.predict(preprocessedImage)
+
     predictions = model(adverImage)
+
     adver_label = np.argmax(predictions, axis=1)
     class_name = label_names[int(adver_label)]
     adverImage = (baseImage + deltaUpdated).numpy().squeeze()
